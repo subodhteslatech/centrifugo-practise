@@ -1,3 +1,4 @@
+from websockets.asyncio.client import connect
 from fastapi import WebSocket
 import json
 
@@ -95,7 +96,6 @@ class SocketHandler:
         chat_history[self.channel].append(message)
         print(chat_history)
 
-
     async def connect(self):
         await self.websocket.accept()
 
@@ -133,3 +133,100 @@ class SocketHandler:
                 await connection.send_text(str({"msg": "A user has left the channel"}))
 
         await self.websocket.close()
+
+
+class CentrifugoHandler:
+    def __init__(self, websocket: WebSocket, user_id: str):
+        from app import API_KEY, CENTRIFUGO_BASE_URL
+
+        self.user_id = user_id
+        self.api_key = API_KEY
+        self.base_url = CENTRIFUGO_BASE_URL
+        self.websocket: WebSocket = websocket
+        self.channel = None
+
+    def _set_channel(self, data: dict) -> None:
+        print(self.channel)
+
+        channel = self.data.get("channel", None)
+        if channel is not None:
+            self.channel = channel
+            print(f"Channel set to: {self.channel}")
+            return
+
+        raise ValueError("Channel is not set in data")
+
+    def _set_data(self, data: str):
+        self.data = json.loads(data)
+
+    def _call_api(self, endpoint: str, data: dict):
+        import requests
+
+        headers = {"Content-type": "application/json", "X-API-KEY": self.api_key}
+
+        response = requests.post(
+            f"{self.base_url}/api/{endpoint}", json=data, headers=headers
+        )
+
+        if response.status_code != 200:
+            print(response.status_code)
+            print(response.text)
+            raise Exception(f"Error: {response.status_code}, {response.text}")
+
+        if response.status_code == 200 and response.json().get("error", None):
+            raise Exception(f"Error: {response.json()}")
+
+        return response.json()
+
+    async def subcribe(self) -> None:
+        data = {
+            "user": self.user_id,
+            "channel": "chat",
+        }
+
+        response = self._call_api("subscribe", data)
+        print("Subscribe Response:")
+        print(response)
+
+        await self.websocket.send_text(
+            str({"msg": f"Subscribed to channel {self.channel}"})
+        )
+
+    async def publish(self) -> None:
+        data = {
+            "channel": "chat",
+            "data": self.data.get("data", None),
+        }
+
+        response = self._call_api("publish", data)
+
+        print("Publish Response:")
+        print(response)
+
+        await self.websocket.send_text(str({"msg": "Message published"}))
+
+    async def centrifugo_connect(self):
+        # await self.websocket.accept()
+
+        # while True:
+        #     data = await self.websocket.receive_text()
+
+        #     events = {
+        #         "subscribe": self.subcribe,
+        #         "publish": self.publish,
+        #     }
+
+        #     self._set_data(data)
+        #     event = self.data.get("event", None)
+        #     if event in events:
+        #         self._set_channel(self.data)
+        #         await events[event]()
+        #     else:
+        #         await self.websocket.send_text(str({"msg": f"Unknown event: {event}"}))
+
+        async with connect("ws://localhost:8000/connection/websocket") as websocket:
+            try:
+                response = await websocket.recv()
+                print(f"Response: {response}")
+            except Exception as e:
+                print(f"Error: {e}")

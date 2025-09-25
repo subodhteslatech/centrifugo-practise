@@ -80,3 +80,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except Exception as e:
         await socket_handler.disconnect(str(e))
+
+
+# @app.websocket("/chat/{user_id}")
+# async def user_websocket_endpoint(websocket: WebSocket, user_id: str):
+#     try:
+#         centrifugo_handler = CentrifugoHandler(websocket=websocket, user_id=user_id)
+#         await centrifugo_handler.connect()
+
+#     except WebSocketDisconnect:
+#         await centrifugo_handler.disconnect()
+
+#     except Exception as e:
+#         await centrifugo_handler.disconnect(str(e))
