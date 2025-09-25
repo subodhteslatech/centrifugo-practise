@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from datetime import datetime
 import requests
 import os
 
 from schema import Chat
+from handler import SocketHandler
 from dotenv import load_dotenv
 
 app = FastAPI()
@@ -66,3 +67,16 @@ def subscribe(user: str):
         raise HTTPException(status_code=400, detail=response.json())
 
     return {"msg": f"Subscribed {user} to channel chat:#{user}"}
+
+
+@app.websocket("/chat")
+async def websocket_endpoint(websocket: WebSocket):
+    try:
+        socket_handler = SocketHandler(websocket)
+        await socket_handler.connect()
+
+    except WebSocketDisconnect:
+        await socket_handler.disconnect()
+
+    except Exception as e:
+        await socket_handler.disconnect(str(e))
