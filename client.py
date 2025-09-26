@@ -137,8 +137,6 @@ class CentrifugoClient:
 
                     async for message in self.websocket.recv_streaming(decode=None):
                         print(f"Message: {message}")
-                        if message is None:
-                            break
 
                     # response = await self.websocket.recv()
                     # print(f"Response: {response}")
