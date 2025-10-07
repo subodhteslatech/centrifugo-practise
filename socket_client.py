@@ -88,7 +88,7 @@ class CentrifugoClient:
             if self.websocket is None:
                 raise Exception("WebSocket is not connected")
 
-            if self.channel is None:
+            if not self.channel_list:
                 raise Exception("No channel subscribed")
 
             # msg = input("Enter message to publish: ")
