@@ -10,7 +10,8 @@ class CentrifugoClient:
     def __init__(self):
         self.websocket: websockets.ClientConnection | None = None
         self.channel = "chat:123"
-        self.uri = "ws://localhost:8000/connection/websocket"
+        self.channel_list = []
+        self.uri = "ws://192.168.1.242:8000/connection/websocket"
         self.user_id = str(time.time())
 
     def _generate_token(self, user_id: str):
@@ -57,6 +58,16 @@ class CentrifugoClient:
         if self.websocket is None:
             raise Exception("WebSocket is not connected")
 
+        channel = await self.ainput("Enter channel to subscribe (default 'chat:123'): ")
+        if channel.strip():
+            self.channel = channel.strip()
+
+        if self.channel in self.channel_list:
+            print(f"Already subscribed to channel: {self.channel}")
+            return
+
+        self.channel_list.append(self.channel)
+
         await self.websocket.send(
             json.dumps(
                 {
@@ -81,7 +92,17 @@ class CentrifugoClient:
                 raise Exception("No channel subscribed")
 
             # msg = input("Enter message to publish: ")
-            msg = f"message from {self.user_id}"
+            # msg = f"message from {self.user_id}"
+            print("channel list")
+            for ch in self.channel_list:
+                print(f"- {ch}")
+
+            channel = await self.ainput(
+                f"Enter channel to publish (default '{self.channel}'): "
+            )
+            if channel.strip():
+                self.channel = channel.strip()
+            msg = await self.ainput("Enter message to publish: ")
 
             await self.websocket.send(
                 json.dumps(
@@ -93,6 +114,7 @@ class CentrifugoClient:
             )
         except Exception as e:
             print(f"Error: {e}")
+            await self.disconnect()
 
     async def listen_messages(self):
         if self.websocket is None:
@@ -147,6 +169,9 @@ class CentrifugoClient:
         )
         print("Requested presence for channel:", self.channel)
 
+    async def ainput(self, prompt: str = ""):
+        return await asyncio.to_thread(input, prompt)
+
     async def run(self):
         try:
             async with websockets.connect(self.uri) as websocket:
@@ -155,27 +180,54 @@ class CentrifugoClient:
                 # await asyncio.sleep(3600)
                 await self.connect()
                 await asyncio.sleep(1)
-                await self.subscribe()
-                await asyncio.sleep(1)
+                # await self.subscribe()
+                # await asyncio.sleep(1)
                 # await asyncio.sleep(3600)
                 while True:
                     try:
-                        await asyncio.sleep(5)
+                        print("Enter a event to perform:")
+                        print("1. Subscribe to channel")
+                        print("2. Publish message to channel")
+                        print("3. Get channel history")
+                        print("4. Get user presence")
+                        print("5. Exit")
 
-                        await self.publish()
+                        choice = await self.ainput("Enter choice: ")
 
-                        await asyncio.sleep(10)
+                        events = {
+                            "1": self.subscribe,
+                            "2": self.publish,
+                            "3": self.get_history,
+                            "4": self.get_user_presence,
+                            "5": self.disconnect,
+                        }
+
+                        if choice in events:
+                            await events[choice]()
+                        else:
+                            print("Invalid choice")
+
+                    # try:
+                    #     # await asyncio.sleep(5)
+
+                    #     await self.publish()
+
+                    #     # await asyncio.sleep(10)
 
                     except websockets.ConnectionClosed:
-                        print("Connection closed, reconnecting...")
-                        await asyncio.sleep(5)
+                        await self.disconnect()
+
+                    except KeyboardInterrupt:
+                        print("Exiting...")
                         await self.disconnect()
 
                     except Exception as e:
                         print(f"Error during publish: {e}")
+                        await self.disconnect()
 
         except Exception as e:
             print(f"Error: {e}")
+            await self.disconnect()
 
 
 if __name__ == "__main__":
