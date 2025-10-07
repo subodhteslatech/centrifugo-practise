@@ -68,6 +68,8 @@ class CentrifugoClient:
 
         print("Subscribed to channel:", self.channel)
 
+        await self.get_history()
+
     async def publish(self):
         try:
             if self.websocket is None:
@@ -99,7 +101,8 @@ class CentrifugoClient:
         # await self.subscribe()
         try:
             while True:
-                print("Inside Block")
+                print()
+                print()
                 message = await self.websocket.recv()
                 print(f"Received message: {message}")
 
@@ -107,6 +110,23 @@ class CentrifugoClient:
                     await self.websocket.send(message)
         except Exception as e:
             print(f"Error: {e}")
+
+    async def get_history(self):
+        if self.websocket is None:
+            raise Exception("WebSocket is not connected")
+
+        if self.channel is None:
+            raise Exception("No channel subscribed")
+
+        await self.websocket.send(
+            json.dumps(
+                {
+                    "history": {"channel": self.channel, "limit": 10},
+                    "id": 4,
+                }
+            )
+        )
+        print("Requested history for channel:", self.channel)
 
     async def run(self):
         try:
