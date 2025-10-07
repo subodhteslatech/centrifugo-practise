@@ -70,6 +70,8 @@ class CentrifugoClient:
 
         await self.get_history()
 
+        await self.get_user_presence()
+
     async def publish(self):
         try:
             if self.websocket is None:
@@ -127,6 +129,23 @@ class CentrifugoClient:
             )
         )
         print("Requested history for channel:", self.channel)
+
+    async def get_user_presence(self):
+        if self.websocket is None:
+            raise Exception("WebSocket is not connected")
+
+        if self.channel is None:
+            raise Exception("No channel subscribed")
+
+        await self.websocket.send(
+            json.dumps(
+                {
+                    "presence": {"channel": self.channel},
+                    "id": 5,
+                }
+            )
+        )
+        print("Requested presence for channel:", self.channel)
 
     async def run(self):
         try:
