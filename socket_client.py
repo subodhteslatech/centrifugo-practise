@@ -116,6 +116,52 @@ class CentrifugoClient:
             print(f"Error: {e}")
             await self.disconnect()
 
+    async def broadcast(self):
+        if self.websocket is None:
+            raise Exception("WebSocket is not connected")
+
+        for i, ch in enumerate(self.channel_list):
+            print(f"{i + 1}. {ch}")
+
+        channels = await self.ainput(
+            "Enter channels number to broadcast (comma separated, leave empty for all): "
+        )
+        if channels.strip():
+            selected_channels = []
+            for ch_num in channels.split(","):
+                try:
+                    ch_index = int(ch_num.strip()) - 1
+                    if 0 <= ch_index < len(self.channel_list):
+                        selected_channels.append(self.channel_list[ch_index])
+                except ValueError:
+                    continue
+        else:
+            selected_channels = self.channel_list
+
+        msg = await self.ainput("Enter message to broadcast: ")
+
+        # await self.websocket.send(
+        #     json.dumps(
+        #         {
+        #             "broadcast": {
+        #                 "data": {"text": msg},
+        #                 "channels": selected_channels,
+        #             },
+        #             "id": 3,
+        #         }
+        #     )
+        # )
+
+        for ch in selected_channels:
+            await self.websocket.send(
+                json.dumps(
+                    {
+                        "publish": {"channel": ch, "data": {"text": msg}},
+                        "id": 3,
+                    }
+                )
+            )
+
     async def listen_messages(self):
         if self.websocket is None:
             raise Exception("WebSocket is not connected")
@@ -190,7 +236,8 @@ class CentrifugoClient:
                         print("2. Publish message to channel")
                         print("3. Get channel history")
                         print("4. Get user presence")
-                        print("5. Exit")
+                        print("5. Broadcast message to all users")
+                        print("6. Exit")
 
                         choice = await self.ainput("Enter choice: ")
 
@@ -199,7 +246,8 @@ class CentrifugoClient:
                             "2": self.publish,
                             "3": self.get_history,
                             "4": self.get_user_presence,
-                            "5": self.disconnect,
+                            "5": self.broadcast,
+                            "6": self.disconnect,
                         }
 
                         if choice in events:
