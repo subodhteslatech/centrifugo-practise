@@ -3,7 +3,11 @@ import time
 import asyncio
 import json
 import websockets
+import sys
+from itertools import count
 # import threading
+
+EVENT_ID = count(1)
 
 
 class CentrifugoClient:
@@ -12,7 +16,7 @@ class CentrifugoClient:
         self.channel = "chat:123"
         self.channel_list = []
         self.uri = "ws://192.168.1.242:8000/connection/websocket"
-        self.user_id = str(time.time())
+        self.user_id = str(int(time.time()))
 
     def _generate_token(self, user_id: str):
         payload = {"sub": user_id, "exp": int(time.time()) + 3600}
@@ -37,7 +41,7 @@ class CentrifugoClient:
                 json.dumps(
                     {
                         "connect": {"token": self._generate_token(self.user_id)},
-                        "id": 1,
+                        "id": next(EVENT_ID),
                     }
                 )
             )
@@ -49,10 +53,15 @@ class CentrifugoClient:
             print(f"Error: {e}")
 
     async def disconnect(self):
+        for task in asyncio.all_tasks():
+            if task is not asyncio.current_task():
+                task.cancel()
+
         if self.websocket is None:
-            raise Exception("WebSocket is not connected")
+            sys.exit()
+            return
         await self.websocket.close()
-        exit(0)
+        sys.exit()
 
     async def subscribe(self):
         if self.websocket is None:
@@ -72,7 +81,7 @@ class CentrifugoClient:
             json.dumps(
                 {
                     "subscribe": {"channel": self.channel},
-                    "id": 2,
+                    "id": next(EVENT_ID),
                 }
             )
         )
@@ -108,7 +117,7 @@ class CentrifugoClient:
                 json.dumps(
                     {
                         "publish": {"channel": self.channel, "data": {"text": msg}},
-                        "id": 3,
+                        "id": next(EVENT_ID),
                     }
                 )
             )
@@ -139,25 +148,24 @@ class CentrifugoClient:
             selected_channels = self.channel_list
 
         msg = await self.ainput("Enter message to broadcast: ")
-
-        # await self.websocket.send(
-        #     json.dumps(
-        #         {
-        #             "broadcast": {
-        #                 "data": {"text": msg},
-        #                 "channels": selected_channels,
-        #             },
-        #             "id": 3,
-        #         }
-        #     )
+        # print(type(selected_channels))
+        # print(selected_channels)
+        # result = json.dumps(
+        #     {
+        #         "id": next(EVENT_ID),
+        #         "method": "broadcast",
+        #         "params": {"channels": selected_channels, "data": {"text": msg}},
+        #     }
         # )
+        # print(f"sending: {result}")
+        # await self.websocket.send(result)
 
         for ch in selected_channels:
             await self.websocket.send(
                 json.dumps(
                     {
                         "publish": {"channel": ch, "data": {"text": msg}},
-                        "id": 3,
+                        "id": next(EVENT_ID),
                     }
                 )
             )
@@ -178,8 +186,19 @@ class CentrifugoClient:
 
                 if message == "{}":
                     await self.websocket.send(message)
+
+        except websockets.ConnectionClosedOK:
+            print("Connection closed normally")
+            await self.disconnect()
+
+        except websockets.ConnectionClosedError as e:
+            print(f"Connection closed with error: {e}")
+            sys.exit()
+            await self.disconnect()
+
         except Exception as e:
             print(f"Error: {e}")
+            await self.disconnect()
 
     async def get_history(self):
         if self.websocket is None:
@@ -192,7 +211,7 @@ class CentrifugoClient:
             json.dumps(
                 {
                     "history": {"channel": self.channel, "limit": 10},
-                    "id": 4,
+                    "id": next(EVENT_ID),
                 }
             )
         )
@@ -209,7 +228,7 @@ class CentrifugoClient:
             json.dumps(
                 {
                     "presence": {"channel": self.channel},
-                    "id": 5,
+                    "id": next(EVENT_ID),
                 }
             )
         )
@@ -262,7 +281,13 @@ class CentrifugoClient:
 
                     #     # await asyncio.sleep(10)
 
-                    except websockets.ConnectionClosed:
+                    except websockets.ConnectionClosedOK:
+                        await self.disconnect()
+
+                    except websockets.ConnectionClosedError as e:
+                        print(f"Connection closed with error: {e}")
+                        sys.exit()
+
                         await self.disconnect()
 
                     except KeyboardInterrupt:
