@@ -2,14 +2,15 @@ import jwt
 import time
 import asyncio
 import json
-from websockets.asyncio.client import connect, ClientConnection
 import websockets
+# import threading
 
 
 class CentrifugoClient:
     def __init__(self):
-        self.websocket: ClientConnection | None = None
+        self.websocket: websockets.ClientConnection | None = None
         self.channel = None
+        self.uri = "ws://localhost:8000/connection/websocket"
 
     def _generate_token(self, user_id: str):
         payload = {"sub": user_id, "exp": int(time.time()) + 3600}
@@ -41,6 +42,7 @@ class CentrifugoClient:
         if self.websocket is None:
             raise Exception("WebSocket is not connected")
         await self.websocket.close()
+        exit(0)
 
     async def subscribe(self):
         if self.websocket is None:
@@ -76,47 +78,52 @@ class CentrifugoClient:
             )
         )
 
+    async def listen_messages(self):
+        if self.websocket is None:
+            raise Exception("WebSocket is not connected")
+
+        await self.connect()
+        self.channel = "chat"
+        await self.subscribe()
+        try:
+            while True:
+                print("Inside Block")
+                message = await self.websocket.recv()
+                print(f"Received message: {message}")
+        except Exception as e:
+            print(f"Error: {e}")
+
     async def run(self):
         try:
-            async with connect("ws://localhost:8000/connection/websocket") as websocket:
+            async with websockets.connect(self.uri) as websocket:
                 self.websocket = websocket
-
+                asyncio.create_task(self.listen_messages())
+                await asyncio.sleep(3600)
                 while True:
-                    print("1 - connect")
-                    print("2 - subscribe")
-                    print("3 - publish")
-                    print("4 - disconnect")
+                    try:
+                        print("1 - connect")
+                        print("2 - subscribe")
+                        print("3 - publish")
+                        print("4 - disconnect")
 
-                    event = input("Enter event: ")
+                        event = input("Enter event: ")
 
-                    events = {
-                        "1": self.connect,
-                        "2": self.subscribe,
-                        "3": self.publish,
-                        "4": self.disconnect,
-                    }
+                        events = {
+                            "1": self.connect,
+                            "2": self.subscribe,
+                            "3": self.publish,
+                            "4": self.disconnect,
+                        }
 
-                    if event in events:
-                        await events[event]()
-                    else:
-                        print("Unknown event")
+                        if event in events:
+                            await events[event]()
+                        else:
+                            print("Unknown event")
 
-                    # async for message in self.websocket.recv_streaming(decode=None):
-                    #     print(f"Message: {message}")
+                        # await self.listen_messages()
 
-                    response = await self.websocket.recv()
-                    print(f"Response: {response}")
-
-        except websockets.ConnectionClosedOK:
-            print("Connection closed normally")
-            await self.disconnect()
-        except websockets.ConnectionClosedError as e:
-            print(f"Connection closed with error: {e}")
-            await self.disconnect()
-
-        except KeyboardInterrupt:
-            print("Interrupted by user")
-            await self.disconnect()
+                    except websockets.ConnectionClosed:
+                        await self.disconnect()
 
         except Exception as e:
             print(f"Error: {e}")
